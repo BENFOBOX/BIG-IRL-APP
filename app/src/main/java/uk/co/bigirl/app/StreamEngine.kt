@@ -66,6 +66,31 @@ class StreamEngine(
         }
     }
 
+    fun updatePreviewSize(
+        width: Int,
+        height: Int,
+    ) {
+        if (width <= 0 || height <= 0) {
+            return
+        }
+
+        if (!prepared) {
+            return
+        }
+
+        runCatching {
+            stream.getGlInterface().setPreviewResolution(
+                width,
+                height,
+            )
+        }.onFailure { error ->
+            event(
+                "Preview resize error: " +
+                    (error.message ?: error.javaClass.simpleName),
+            )
+        }
+    }
+
     fun toggleStream(endpoint: String): Boolean {
         return try {
             if (!prepared || !previewStarted) {
