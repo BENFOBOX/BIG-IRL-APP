@@ -233,9 +233,90 @@ private fun BigIrlApp() {
             color = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground,
         ) {
-            when {
-                settingsOpen -> {
-                    SettingsScreen(
+          Box(
+    modifier = Modifier.fillMaxSize(),
+) {
+    if (isLandscape) {
+        LandscapeStudio(
+            permissionGranted = permissionGranted,
+            cameraStarted = cameraStarted,
+            engine = engine,
+            networks = networks,
+            wifiKbps = wifiKbps,
+            cellularKbps = cellularKbps,
+            status = status,
+            endpointReady = endpoint.isNotBlank(),
+            controlsOnLeft = controlsOnLeft,
+            onRequestPermissions = {
+                permissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.CAMERA,
+                        Manifest.permission.RECORD_AUDIO,
+                    ),
+                )
+            },
+            onStartCamera = {
+                cameraRequested = true
+            },
+            onSurfaceReady = {
+                surfaceView = it
+            },
+            onOpenSettings = {
+                settingsOpen = true
+            },
+        )
+    } else {
+        PortraitStudio(
+            permissionGranted = permissionGranted,
+            cameraStarted = cameraStarted,
+            engine = engine,
+            networks = networks,
+            wifiKbps = wifiKbps,
+            cellularKbps = cellularKbps,
+            status = status,
+            endpointReady = endpoint.isNotBlank(),
+            onRequestPermissions = {
+                permissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.CAMERA,
+                        Manifest.permission.RECORD_AUDIO,
+                    ),
+                )
+            },
+            onStartCamera = {
+                cameraRequested = true
+            },
+            onSurfaceReady = {
+                surfaceView = it
+            },
+            onOpenSettings = {
+                settingsOpen = true
+            },
+        )
+    }
+
+    if (settingsOpen) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+        ) {
+            SettingsScreen(
+                endpoint = endpoint,
+                onEndpointChanged = {
+                    endpoint = it
+                },
+                controlsOnLeft = controlsOnLeft,
+                onControlsOnLeftChanged = {
+                    controlsOnLeft = it
+                },
+                onClose = {
+                    settingsOpen = false
+                },
+            )
+        }
+    }
+}
                         endpoint = endpoint,
                         onEndpointChanged = {
                             endpoint = it
