@@ -1,0 +1,56 @@
+name: Install clean BIG IRL APP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clean project
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_FILE="BIG-IRL-CLEAN.zip"
+          TEMP_DIR="$RUNNER_TEMP/big-irl-clean"
+
+          test -f "$ZIP_FILE"
+
+          rm -rf "$TEMP_DIR"
+          mkdir -p "$TEMP_DIR"
+
+          unzip -q "$ZIP_FILE" -d "$TEMP_DIR"
+          test -d "$TEMP_DIR/BIG-IRL-CLEAN"
+
+          # Workflows are created manually because GitHub blocks one workflow
+          # from pushing another workflow with the default token.
+          rm -rf "$TEMP_DIR/BIG-IRL-CLEAN/.github/workflows"
+
+          cp -a "$TEMP_DIR/BIG-IRL-CLEAN/." "$GITHUB_WORKSPACE/"
+
+          rm -f "$GITHUB_WORKSPACE/$ZIP_FILE"
+
+      - name: Commit clean project
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes found."
+            exit 0
+          fi
+
+          git commit -m "Install clean BIG IRL APP alpha"
+          git push
