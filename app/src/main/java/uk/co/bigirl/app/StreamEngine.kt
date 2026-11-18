@@ -1,6 +1,7 @@
 package uk.co.bigirl.app
 
 import android.content.Context
+import android.util.Log
 import android.view.SurfaceView
 import com.pedro.common.ConnectChecker
 import com.pedro.library.generic.GenericStream
@@ -9,6 +10,10 @@ class StreamEngine(
     context: Context,
     private val event: (String) -> Unit,
 ) : ConnectChecker {
+
+    companion object {
+        private const val TAG = "BIG_IRL_APP"
+    }
 
     private val stream = GenericStream(
         context.applicationContext,
@@ -57,6 +62,8 @@ class StreamEngine(
             prepared = false
             previewStarted = false
 
+            Log.e(TAG, "Camera error", error)
+
             event(
                 "Camera error: " +
                     (error.message ?: error.javaClass.simpleName),
@@ -65,28 +72,32 @@ class StreamEngine(
             false
         }
     }
-fun attachPreviewSurface(
-    surfaceView: SurfaceView,
-) {
-    if (!prepared || !previewStarted) {
-        return
-    }
 
-    runCatching {
-        if (stream.isOnPreview) {
-            stream.stopPreview()
+    fun attachPreviewSurface(
+        surfaceView: SurfaceView,
+    ) {
+        if (!prepared || !previewStarted) {
+            return
         }
 
-        stream.startPreview(surfaceView)
+        runCatching {
+            if (stream.isOnPreview) {
+                stream.stopPreview()
+            }
 
-        event("Camera ready")
-    }.onFailure { error ->
-        event(
-            "Preview attach error: " +
-                (error.message ?: error.javaClass.simpleName),
-        )
+            stream.startPreview(surfaceView)
+
+            event("Camera ready")
+        }.onFailure { error ->
+            Log.e(TAG, "Preview attach error", error)
+
+            event(
+                "Preview attach error: " +
+                    (error.message ?: error.javaClass.simpleName),
+            )
+        }
     }
-}
+
     fun updatePreviewSize(
         width: Int,
         height: Int,
@@ -105,6 +116,8 @@ fun attachPreviewSurface(
                 height,
             )
         }.onFailure { error ->
+            Log.e(TAG, "Preview resize error", error)
+
             event(
                 "Preview resize error: " +
                     (error.message ?: error.javaClass.simpleName),
@@ -127,6 +140,8 @@ fun attachPreviewSurface(
 
             val cleanEndpoint = endpoint.trim()
 
+            Log.d(TAG, "Starting stream to: $cleanEndpoint")
+
             val supported =
                 cleanEndpoint.startsWith("rtmp://") ||
                     cleanEndpoint.startsWith("rtmps://") ||
@@ -140,6 +155,8 @@ fun attachPreviewSurface(
             stream.startStream(cleanEndpoint)
             true
         } catch (error: Throwable) {
+            Log.e(TAG, "Streaming error", error)
+
             event(
                 "Streaming error: " +
                     (error.message ?: error.javaClass.simpleName),
@@ -174,14 +191,17 @@ fun attachPreviewSurface(
         get() = stream.isStreaming
 
     override fun onConnectionStarted(url: String) {
+        Log.d(TAG, "Connection started: $url")
         event("Connecting")
     }
 
     override fun onConnectionSuccess() {
+        Log.i(TAG, "Connection success")
         event("Live")
     }
 
     override fun onConnectionFailed(reason: String) {
+        Log.e(TAG, "Connection failed: $reason")
         event("Connection failed: $reason")
     }
 
@@ -190,14 +210,17 @@ fun attachPreviewSurface(
     }
 
     override fun onDisconnect() {
+        Log.w(TAG, "Disconnected")
         event("Disconnected")
     }
 
     override fun onAuthError() {
+        Log.e(TAG, "Authentication failed")
         event("Authentication failed")
     }
 
     override fun onAuthSuccess() {
+        Log.i(TAG, "Authentication success")
         event("Authenticated")
     }
 }
