@@ -42,7 +42,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
 
-    implementation("com.github.pedroSG94.RootEncoder:library:2.8.2")
+implementation("com.github.pedroSG94.RootEncoder:library:2.8.2")
+implementation("com.github.pedroSG94.RootEncoder:srt:2.8.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 
