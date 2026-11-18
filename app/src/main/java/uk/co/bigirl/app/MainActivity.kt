@@ -1,6 +1,7 @@
 package uk.co.bigirl.app
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
@@ -120,11 +121,9 @@ private fun BigIrlApp() {
     }
 
     /*
-     * These counters are connected to the interface now.
-     *
-     * They remain zero until the multipath transport is implemented,
-     * because the current single-stream transport does not expose
-     * trustworthy per-network bitrate figures.
+     * These will be connected to real per-path traffic figures when the
+     * multipath transport is implemented. They deliberately remain zero
+     * rather than displaying invented figures.
      */
     var wifiKbps by remember {
         mutableIntStateOf(0)
@@ -176,38 +175,38 @@ private fun BigIrlApp() {
         }
     }
 
-   LaunchedEffect(
-    cameraRequested,
-    surfaceView,
-    permissionGranted,
-    cameraStarted,
-) {
-    val preview = surfaceView
-
-    if (
-        !cameraRequested ||
-        preview == null ||
-        !permissionGranted
+    /*
+     * Start the camera once. If rotation creates a replacement SurfaceView,
+     * attach the existing camera pipeline to the new surface.
+     */
+    LaunchedEffect(
+        cameraRequested,
+        surfaceView,
+        permissionGranted,
+        cameraStarted,
     ) {
-        return@LaunchedEffect
+        val preview = surfaceView
+
+        if (
+            !cameraRequested ||
+            preview == null ||
+            !permissionGranted
+        ) {
+            return@LaunchedEffect
+        }
+
+        if (!cameraStarted) {
+            status = "Starting camera"
+
+            cameraStarted = engine.startPreview(
+                surfaceView = preview,
+                profile = StreamProfile(),
+            )
+        } else {
+            engine.attachPreviewSurface(preview)
+        }
     }
 
-    if (!cameraStarted) {
-        status = "Starting camera"
-
-        cameraStarted = engine.startPreview(
-            surfaceView = preview,
-            profile = StreamProfile(),
-        )
-    } else {
-        /*
-         * Rotation can replace the Android SurfaceView even though the
-         * Activity and camera engine remain alive. Attach the existing
-         * camera pipeline to the newly created preview surface.
-         */
-        engine.attachPreviewSurface(preview)
-    }
-}
     BackHandler(
         enabled = settingsOpen,
     ) {
@@ -233,105 +232,14 @@ private fun BigIrlApp() {
             color = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground,
         ) {
-          Box(
-    modifier = Modifier.fillMaxSize(),
-) {
-    if (isLandscape) {
-        LandscapeStudio(
-            permissionGranted = permissionGranted,
-            cameraStarted = cameraStarted,
-            engine = engine,
-            networks = networks,
-            wifiKbps = wifiKbps,
-            cellularKbps = cellularKbps,
-            status = status,
-            endpointReady = endpoint.isNotBlank(),
-            controlsOnLeft = controlsOnLeft,
-            onRequestPermissions = {
-                permissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.CAMERA,
-                        Manifest.permission.RECORD_AUDIO,
-                    ),
-                )
-            },
-            onStartCamera = {
-                cameraRequested = true
-            },
-            onSurfaceReady = {
-                surfaceView = it
-            },
-            onOpenSettings = {
-                settingsOpen = true
-            },
-        )
-    } else {
-        PortraitStudio(
-            permissionGranted = permissionGranted,
-            cameraStarted = cameraStarted,
-            engine = engine,
-            networks = networks,
-            wifiKbps = wifiKbps,
-            cellularKbps = cellularKbps,
-            status = status,
-            endpointReady = endpoint.isNotBlank(),
-            onRequestPermissions = {
-                permissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.CAMERA,
-                        Manifest.permission.RECORD_AUDIO,
-                    ),
-                )
-            },
-            onStartCamera = {
-                cameraRequested = true
-            },
-            onSurfaceReady = {
-                surfaceView = it
-            },
-            onOpenSettings = {
-                settingsOpen = true
-            },
-        )
-    }
-
-    if (settingsOpen) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-            contentColor = MaterialTheme.colorScheme.onBackground,
-        ) {
-            SettingsScreen(
-                endpoint = endpoint,
-                onEndpointChanged = {
-                    endpoint = it
-                },
-                controlsOnLeft = controlsOnLeft,
-                onControlsOnLeftChanged = {
-                    controlsOnLeft = it
-                },
-                onClose = {
-                    settingsOpen = false
-                },
-            )
-        }
-    }
-}
-                        endpoint = endpoint,
-                        onEndpointChanged = {
-                            endpoint = it
-                        },
-                        controlsOnLeft = controlsOnLeft,
-                        onControlsOnLeftChanged = {
-                            controlsOnLeft = it
-                        },
-                        onClose = {
-                            settingsOpen = false
-                        },
-                    )
-                }
-
-                isLandscape -> {
+            /*
+             * The camera interface always remains composed. Settings is drawn
+             * over it as an opaque layer, preventing disposal of SurfaceView.
+             */
+            Box(
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (isLandscape) {
                     LandscapeStudio(
                         permissionGranted = permissionGranted,
                         cameraStarted = cameraStarted,
@@ -340,7 +248,7 @@ private fun BigIrlApp() {
                         wifiKbps = wifiKbps,
                         cellularKbps = cellularKbps,
                         status = status,
-                        endpointReady = endpoint.isNotBlank(),
+                        endpoint = endpoint,
                         controlsOnLeft = controlsOnLeft,
                         onRequestPermissions = {
                             permissionLauncher.launch(
@@ -353,16 +261,16 @@ private fun BigIrlApp() {
                         onStartCamera = {
                             cameraRequested = true
                         },
-                        onSurfaceReady = {
-                            surfaceView = it
+                        onSurfaceReady = { replacementSurface ->
+                            if (surfaceView !== replacementSurface) {
+                                surfaceView = replacementSurface
+                            }
                         },
                         onOpenSettings = {
                             settingsOpen = true
                         },
                     )
-                }
-
-                else -> {
+                } else {
                     PortraitStudio(
                         permissionGranted = permissionGranted,
                         cameraStarted = cameraStarted,
@@ -371,7 +279,7 @@ private fun BigIrlApp() {
                         wifiKbps = wifiKbps,
                         cellularKbps = cellularKbps,
                         status = status,
-                        endpointReady = endpoint.isNotBlank(),
+                        endpoint = endpoint,
                         onRequestPermissions = {
                             permissionLauncher.launch(
                                 arrayOf(
@@ -383,13 +291,38 @@ private fun BigIrlApp() {
                         onStartCamera = {
                             cameraRequested = true
                         },
-                        onSurfaceReady = {
-                            surfaceView = it
+                        onSurfaceReady = { replacementSurface ->
+                            if (surfaceView !== replacementSurface) {
+                                surfaceView = replacementSurface
+                            }
                         },
                         onOpenSettings = {
                             settingsOpen = true
                         },
                     )
+                }
+
+                if (settingsOpen) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background,
+                        contentColor =
+                            MaterialTheme.colorScheme.onBackground,
+                    ) {
+                        SettingsScreen(
+                            endpoint = endpoint,
+                            onEndpointChanged = {
+                                endpoint = it
+                            },
+                            controlsOnLeft = controlsOnLeft,
+                            onControlsOnLeftChanged = {
+                                controlsOnLeft = it
+                            },
+                            onClose = {
+                                settingsOpen = false
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -405,7 +338,7 @@ private fun LandscapeStudio(
     wifiKbps: Int,
     cellularKbps: Int,
     status: String,
-    endpointReady: Boolean,
+    endpoint: String,
     controlsOnLeft: Boolean,
     onRequestPermissions: () -> Unit,
     onStartCamera: () -> Unit,
@@ -419,13 +352,13 @@ private fun LandscapeStudio(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (controlsOnLeft) {
-            FutureControlSpace(
+            ControlSpace(
                 modifier = Modifier
                     .width(230.dp)
                     .fillMaxHeight(),
                 engine = engine,
                 cameraStarted = cameraStarted,
-                endpointReady = endpointReady,
+                endpoint = endpoint,
                 onOpenSettings = onOpenSettings,
             )
         }
@@ -447,13 +380,13 @@ private fun LandscapeStudio(
         )
 
         if (!controlsOnLeft) {
-            FutureControlSpace(
+            ControlSpace(
                 modifier = Modifier
                     .width(230.dp)
                     .fillMaxHeight(),
                 engine = engine,
                 cameraStarted = cameraStarted,
-                endpointReady = endpointReady,
+                endpoint = endpoint,
                 onOpenSettings = onOpenSettings,
             )
         }
@@ -469,7 +402,7 @@ private fun PortraitStudio(
     wifiKbps: Int,
     cellularKbps: Int,
     status: String,
-    endpointReady: Boolean,
+    endpoint: String,
     onRequestPermissions: () -> Unit,
     onStartCamera: () -> Unit,
     onSurfaceReady: (SurfaceView) -> Unit,
@@ -519,28 +452,13 @@ private fun PortraitStudio(
             onSurfaceReady = onSurfaceReady,
         )
 
-        Button(
-            onClick = {
-                /*
-                 * Streaming is started from this button once a saved endpoint
-                 * exists. The settings page owns the endpoint field.
-                 */
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled =
-                cameraStarted &&
-                    endpointReady,
-        ) {
-            Text(
-                if (engine.isStreaming) {
-                    "Stop stream"
-                } else {
-                    "Go live"
-                },
-            )
-        }
+        GoLiveButton(
+            engine = engine,
+            cameraStarted = cameraStarted,
+            endpoint = endpoint,
+        )
 
-        if (!endpointReady) {
+        if (endpoint.isBlank()) {
             Text(
                 text = "Add a stream endpoint in Settings.",
                 color = Color(0xFFB8C4D8),
@@ -577,8 +495,11 @@ private fun PreviewPanel(
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = {
-                SurfaceView(it).also(onSurfaceReady)
+            factory = { currentContext ->
+                SurfaceView(currentContext).also(onSurfaceReady)
+            },
+            update = { currentSurface ->
+                onSurfaceReady(currentSurface)
             },
         )
 
@@ -674,11 +595,11 @@ private fun CompactNetworkStat(
 }
 
 @Composable
-private fun FutureControlSpace(
+private fun ControlSpace(
     modifier: Modifier,
     engine: StreamEngine,
     cameraStarted: Boolean,
-    endpointReady: Boolean,
+    endpoint: String,
     onOpenSettings: () -> Unit,
 ) {
     Card(
@@ -720,7 +641,7 @@ private fun FutureControlSpace(
             )
 
             Text(
-                text = "Reserved for your next controls.",
+                text = "Reserved for your planned controls.",
                 color = Color(0xFFB8C4D8),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -729,28 +650,13 @@ private fun FutureControlSpace(
                 modifier = Modifier.weight(1f),
             )
 
-            Button(
-                onClick = {
-                    /*
-                     * The final call is connected once saved endpoint state is
-                     * passed into this control panel.
-                     */
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled =
-                    cameraStarted &&
-                        endpointReady,
-            ) {
-                Text(
-                    if (engine.isStreaming) {
-                        "Stop stream"
-                    } else {
-                        "Go live"
-                    },
-                )
-            }
+            GoLiveButton(
+                engine = engine,
+                cameraStarted = cameraStarted,
+                endpoint = endpoint,
+            )
 
-            if (!endpointReady) {
+            if (endpoint.isBlank()) {
                 Text(
                     text = "Set the endpoint in Settings.",
                     color = Color(0xFFB8C4D8),
@@ -758,6 +664,31 @@ private fun FutureControlSpace(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun GoLiveButton(
+    engine: StreamEngine,
+    cameraStarted: Boolean,
+    endpoint: String,
+) {
+    Button(
+        onClick = {
+            engine.toggleStream(endpoint)
+        },
+        modifier = Modifier.fillMaxWidth(),
+        enabled =
+            cameraStarted &&
+                endpoint.isNotBlank(),
+    ) {
+        Text(
+            if (engine.isStreaming) {
+                "Stop stream"
+            } else {
+                "Go live"
+            },
+        )
     }
 }
 
@@ -818,9 +749,7 @@ private fun SettingsScreen(
                 Text("rtmps://... or srt://...")
             },
             supportingText = {
-                Text(
-                    "The endpoint stays inside the settings screen.",
-                )
+                Text("Your endpoint is entered only on this screen.")
             },
             singleLine = true,
         )
@@ -879,19 +808,19 @@ private fun SettingsScreen(
 }
 
 private fun hasCameraAndMicrophonePermissions(
-    context: android.content.Context,
+    context: Context,
 ): Boolean {
-    val camera =
+    val cameraGranted =
         ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.CAMERA,
         ) == PackageManager.PERMISSION_GRANTED
 
-    val microphone =
+    val microphoneGranted =
         ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO,
         ) == PackageManager.PERMISSION_GRANTED
 
-    return camera && microphone
+    return cameraGranted && microphoneGranted
 }
