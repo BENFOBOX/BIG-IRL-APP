@@ -1,20 +1,154 @@
 package uk.co.bigirl.app
+
 import android.content.Context
 import android.view.SurfaceView
 import com.pedro.common.ConnectChecker
 import com.pedro.library.generic.GenericStream
-class StreamEngine(c:Context,private val event:(String)->Unit):ConnectChecker{
- private val stream=GenericStream(c.applicationContext,this);private var ready=false
- fun prepare(p:StreamProfile):Boolean{if(ready)return true;ready=try{stream.prepareVideo(p.width,p.height,p.videoBitrate)&&stream.prepareAudio(p.sampleRate,true,p.audioBitrate)}catch(e:IllegalArgumentException){event("Encoder error: ${e.message}");false};event(if(ready)"Encoder ready" else "Encoder failed");return ready}
- fun preview(v:SurfaceView){if(!stream.isOnPreview)stream.startPreview(v)}
- fun toggle(url:String){if(stream.isStreaming)stream.stopStream() else if(ready)stream.startStream(url.trim())}
- fun release(){if(stream.isStreaming)stream.stopStream();if(stream.isOnPreview)stream.stopPreview();stream.release()}
- val live:Boolean get()=stream.isStreaming
- override fun onConnectionStarted(url:String)=event("Connecting")
- override fun onConnectionSuccess()=event("Live")
- override fun onConnectionFailed(reason:String)=event("Failed: $reason")
- override fun onNewBitrate(bitrate:Long)=event("${bitrate/1000} Kbps")
- override fun onDisconnect()=event("Disconnected")
- override fun onAuthError()=event("Authentication failed")
- override fun onAuthSuccess()=event("Authenticated")
+
+class StreamEngine(
+    context: Context,
+    private val event: (String) -> Unit,
+) : ConnectChecker {
+
+    private val stream = GenericStream(
+        context.applicationContext,
+        this,
+    )
+
+    private var prepared = false
+    private var previewStarted = false
+
+    fun startPreview(
+        surfaceView: SurfaceView,
+        profile: StreamProfile,
+    ): Boolean {
+        return try {
+            if (!prepared) {
+                event("Preparing camera and microphone")
+
+                prepared =
+                    stream.prepareVideo(
+                        profile.width,
+                        profile.height,
+                        profile.videoBitrate,
+                    ) &&
+                    stream.prepareAudio(
+                        profile.sampleRate,
+                        true,
+                        profile.audioBitrate,
+                    )
+            }
+
+            if (!prepared) {
+                event("Encoder preparation failed")
+                return false
+            }
+
+            if (!stream.isOnPreview) {
+                stream.startPreview(surfaceView)
+            }
+
+            previewStarted = true
+            event("Camera ready")
+            true
+        } catch (error: Throwable) {
+            prepared = false
+            previewStarted = false
+
+            event(
+                "Camera error: " +
+                    (error.message ?: error.javaClass.simpleName),
+            )
+
+            false
+        }
+    }
+
+    fun toggleStream(endpoint: String): Boolean {
+        return try {
+            if (!prepared || !previewStarted) {
+                event("Start the camera first")
+                return false
+            }
+
+            if (stream.isStreaming) {
+                stream.stopStream()
+                event("Stream stopped")
+            } else {
+                val cleanEndpoint = endpoint.trim()
+
+                if (
+                    !cleanEndpoint.startsWith("rtmp://") &&
+                    !cleanEndpoint.startsWith("rtmps://") &&
+                    !cleanEndpoint.startsWith("srt://")
+                ) {
+                    event("Enter a valid RTMP, RTMPS or SRT address")
+                    return false
+                }
+
+                stream.startStream(cleanEndpoint)
+            }
+
+            true
+        } catch (error: Throwable) {
+            event(
+                "Streaming error: " +
+                    (error.message ?: error.javaClass.simpleName),
+            )
+
+            false
+        }
+    }
+
+    fun release() {
+        runCatching {
+            if (stream.isStreaming) {
+                stream.stopStream()
+            }
+        }
+
+        runCatching {
+            if (stream.isOnPreview) {
+                stream.stopPreview()
+            }
+        }
+
+        runCatching {
+            stream.release()
+        }
+
+        previewStarted = false
+        prepared = false
+    }
+
+    val isStreaming: Boolean
+        get() = stream.isStreaming
+
+    override fun onConnectionStarted(url: String) {
+        event("Connecting")
+    }
+
+    override fun onConnectionSuccess() {
+        event("Live")
+    }
+
+    override fun onConnectionFailed(reason: String) {
+        event("Connection failed: $reason")
+    }
+
+    override fun onNewBitrate(bitrate: Long) {
+        event("Sending ${bitrate / 1000} Kbps")
+    }
+
+    override fun onDisconnect() {
+        event("Disconnected")
+    }
+
+    override fun onAuthError() {
+        event("Authentication failed")
+    }
+
+    override fun onAuthSuccess() {
+        event("Authenticated")
+    }
 }
