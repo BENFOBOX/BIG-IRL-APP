@@ -176,28 +176,38 @@ private fun BigIrlApp() {
         }
     }
 
-    LaunchedEffect(
-        cameraRequested,
-        surfaceView,
-        permissionGranted,
+   LaunchedEffect(
+    cameraRequested,
+    surfaceView,
+    permissionGranted,
+    cameraStarted,
+) {
+    val preview = surfaceView
+
+    if (
+        !cameraRequested ||
+        preview == null ||
+        !permissionGranted
     ) {
-        val preview = surfaceView
-
-        if (
-            cameraRequested &&
-            preview != null &&
-            permissionGranted &&
-            !cameraStarted
-        ) {
-            status = "Starting camera"
-
-            cameraStarted = engine.startPreview(
-                surfaceView = preview,
-                profile = StreamProfile(),
-            )
-        }
+        return@LaunchedEffect
     }
 
+    if (!cameraStarted) {
+        status = "Starting camera"
+
+        cameraStarted = engine.startPreview(
+            surfaceView = preview,
+            profile = StreamProfile(),
+        )
+    } else {
+        /*
+         * Rotation can replace the Android SurfaceView even though the
+         * Activity and camera engine remain alive. Attach the existing
+         * camera pipeline to the newly created preview surface.
+         */
+        engine.attachPreviewSurface(preview)
+    }
+}
     BackHandler(
         enabled = settingsOpen,
     ) {
