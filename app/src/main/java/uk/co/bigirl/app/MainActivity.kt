@@ -2,6 +2,7 @@ package uk.co.bigirl.app
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.SurfaceView
 import androidx.activity.ComponentActivity
@@ -14,10 +15,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -57,6 +63,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun BigIrlApp() {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+
+    val isLandscape =
+        configuration.orientation ==
+            Configuration.ORIENTATION_LANDSCAPE
 
     var status by remember {
         mutableStateOf("Ready")
@@ -164,159 +175,346 @@ private fun BigIrlApp() {
             color = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement =
-                    Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = "BIG IRL APP",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
-                )
-
-                Text(
-                    text =
-                        "Original alpha • direct RTMP/SRT contribution",
-                    color = Color(0xFFD7E2F4),
-                )
-
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF121C2E),
-                        contentColor = Color.White,
-                    ),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement =
-                            Arrangement.SpaceBetween,
-                    ) {
-                        NetworkPill(
-                            name = "Wi-Fi",
-                            active = networks.wifi,
-                        )
-
-                        NetworkPill(
-                            name = "Cellular",
-                            active = networks.cellular,
-                        )
-                    }
-
-                    Text(
-                        text = status,
-                        color = Color.White,
-                        modifier = Modifier.padding(
-                            start = 12.dp,
-                            end = 12.dp,
-                            bottom = 12.dp,
-                        ),
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .onSizeChanged { size ->
-                            engine.updatePreviewSize(
-                                width = size.width,
-                                height = size.height,
-                            )
-                        }
-                        .background(
-                            color = Color.Black,
-                            shape = RoundedCornerShape(14.dp),
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = {
-                            SurfaceView(it).also { view ->
-                                surfaceView = view
-                            }
-                        },
-                    )
-
-                    if (!permissionGranted) {
-                        Button(
-                            onClick = {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.CAMERA,
-                                        Manifest.permission.RECORD_AUDIO,
-                                    ),
-                                )
-                            },
-                        ) {
-                            Text("Allow camera and microphone")
-                        }
-                    } else if (!cameraStarted) {
-                        Button(
-                            onClick = {
-                                cameraRequested = true
-                            },
-                        ) {
-                            Text("Start camera preview")
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = endpoint,
-                    onValueChange = {
+            if (isLandscape) {
+                LandscapeLayout(
+                    permissionGranted = permissionGranted,
+                    cameraStarted = cameraStarted,
+                    endpoint = endpoint,
+                    onEndpointChanged = {
                         endpoint = it
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        Text("Stream endpoint")
+                    networks = networks,
+                    status = status,
+                    engine = engine,
+                    onRequestPermissions = {
+                        permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.CAMERA,
+                                Manifest.permission.RECORD_AUDIO,
+                            ),
+                        )
                     },
-                    placeholder = {
-                        Text("rtmps://... or srt://...")
+                    onStartCamera = {
+                        cameraRequested = true
                     },
-                    singleLine = true,
+                    onSurfaceReady = {
+                        surfaceView = it
+                    },
                 )
-
-                Button(
-                    onClick = {
-                        engine.toggleStream(endpoint)
+            } else {
+                PortraitLayout(
+                    permissionGranted = permissionGranted,
+                    cameraStarted = cameraStarted,
+                    endpoint = endpoint,
+                    onEndpointChanged = {
+                        endpoint = it
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled =
-                        permissionGranted &&
-                            cameraStarted &&
-                            endpoint.isNotBlank(),
-                ) {
-                    Text(
-                        if (engine.isStreaming) {
-                            "Stop"
-                        } else {
-                            "Go live"
-                        },
-                    )
-                }
-
-                Text(
-                    text =
-                        "Test profile: 720p30, 2.5 Mbps video, " +
-                            "128 Kbps audio",
-                    color = Color(0xFFD7E2F4),
-                )
-
-                Text(
-                    text =
-                        "Next milestone: standard SRT to your " +
-                            "home Jetson Nano.",
-                    color = Color(0xFFD7E2F4),
+                    networks = networks,
+                    status = status,
+                    engine = engine,
+                    onRequestPermissions = {
+                        permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.CAMERA,
+                                Manifest.permission.RECORD_AUDIO,
+                            ),
+                        )
+                    },
+                    onStartCamera = {
+                        cameraRequested = true
+                    },
+                    onSurfaceReady = {
+                        surfaceView = it
+                    },
                 )
             }
         }
     }
+}
+
+@Composable
+private fun LandscapeLayout(
+    permissionGranted: Boolean,
+    cameraStarted: Boolean,
+    endpoint: String,
+    onEndpointChanged: (String) -> Unit,
+    networks: NetworkSummary,
+    status: String,
+    engine: StreamEngine,
+    onRequestPermissions: () -> Unit,
+    onStartCamera: () -> Unit,
+    onSurfaceReady: (SurfaceView) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        PreviewPanel(
+            modifier = Modifier
+                .weight(1.7f)
+                .fillMaxHeight(),
+            permissionGranted = permissionGranted,
+            cameraStarted = cameraStarted,
+            engine = engine,
+            onRequestPermissions = onRequestPermissions,
+            onStartCamera = onStartCamera,
+            onSurfaceReady = onSurfaceReady,
+        )
+
+        ControlsPanel(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            endpoint = endpoint,
+            onEndpointChanged = onEndpointChanged,
+            networks = networks,
+            status = status,
+            permissionGranted = permissionGranted,
+            cameraStarted = cameraStarted,
+            engine = engine,
+        )
+    }
+}
+
+@Composable
+private fun PortraitLayout(
+    permissionGranted: Boolean,
+    cameraStarted: Boolean,
+    endpoint: String,
+    onEndpointChanged: (String) -> Unit,
+    networks: NetworkSummary,
+    status: String,
+    engine: StreamEngine,
+    onRequestPermissions: () -> Unit,
+    onStartCamera: () -> Unit,
+    onSurfaceReady: (SurfaceView) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AppHeading()
+
+        StatusCard(
+            networks = networks,
+            status = status,
+        )
+
+        PreviewPanel(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f),
+            permissionGranted = permissionGranted,
+            cameraStarted = cameraStarted,
+            engine = engine,
+            onRequestPermissions = onRequestPermissions,
+            onStartCamera = onStartCamera,
+            onSurfaceReady = onSurfaceReady,
+        )
+
+        StreamControls(
+            endpoint = endpoint,
+            onEndpointChanged = onEndpointChanged,
+            permissionGranted = permissionGranted,
+            cameraStarted = cameraStarted,
+            engine = engine,
+        )
+    }
+}
+
+@Composable
+private fun ControlsPanel(
+    modifier: Modifier,
+    endpoint: String,
+    onEndpointChanged: (String) -> Unit,
+    networks: NetworkSummary,
+    status: String,
+    permissionGranted: Boolean,
+    cameraStarted: Boolean,
+    engine: StreamEngine,
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(end = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AppHeading()
+
+        StatusCard(
+            networks = networks,
+            status = status,
+        )
+
+        StreamControls(
+            endpoint = endpoint,
+            onEndpointChanged = onEndpointChanged,
+            permissionGranted = permissionGranted,
+            cameraStarted = cameraStarted,
+            engine = engine,
+        )
+    }
+}
+
+@Composable
+private fun AppHeading() {
+    Text(
+        text = "BIG IRL APP",
+        style = MaterialTheme.typography.headlineMedium,
+        color = Color.White,
+    )
+
+    Text(
+        text = "Original alpha • direct RTMP/SRT contribution",
+        color = Color(0xFFD7E2F4),
+    )
+}
+
+@Composable
+private fun StatusCard(
+    networks: NetworkSummary,
+    status: String,
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF121C2E),
+            contentColor = Color.White,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = 12.dp,
+                    top = 12.dp,
+                    end = 12.dp,
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            NetworkPill(
+                name = "Wi-Fi",
+                active = networks.wifi,
+            )
+
+            NetworkPill(
+                name = "Cellular",
+                active = networks.cellular,
+            )
+        }
+
+        Text(
+            text = status,
+            color = Color.White,
+            modifier = Modifier.padding(12.dp),
+        )
+    }
+}
+
+@Composable
+private fun PreviewPanel(
+    modifier: Modifier,
+    permissionGranted: Boolean,
+    cameraStarted: Boolean,
+    engine: StreamEngine,
+    onRequestPermissions: () -> Unit,
+    onStartCamera: () -> Unit,
+    onSurfaceReady: (SurfaceView) -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .onSizeChanged { size ->
+                engine.updatePreviewSize(
+                    width = size.width,
+                    height = size.height,
+                )
+            }
+            .background(
+                color = Color.Black,
+                shape = RoundedCornerShape(14.dp),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = {
+                SurfaceView(it).also(onSurfaceReady)
+            },
+        )
+
+        if (!permissionGranted) {
+            Button(
+                onClick = onRequestPermissions,
+            ) {
+                Text("Allow camera and microphone")
+            }
+        } else if (!cameraStarted) {
+            Button(
+                onClick = onStartCamera,
+            ) {
+                Text("Start camera preview")
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamControls(
+    endpoint: String,
+    onEndpointChanged: (String) -> Unit,
+    permissionGranted: Boolean,
+    cameraStarted: Boolean,
+    engine: StreamEngine,
+) {
+    OutlinedTextField(
+        value = endpoint,
+        onValueChange = onEndpointChanged,
+        modifier = Modifier.fillMaxWidth(),
+        label = {
+            Text("Stream endpoint")
+        },
+        placeholder = {
+            Text("rtmps://... or srt://...")
+        },
+        singleLine = true,
+    )
+
+    Button(
+        onClick = {
+            engine.toggleStream(endpoint)
+        },
+        modifier = Modifier.fillMaxWidth(),
+        enabled =
+            permissionGranted &&
+                cameraStarted &&
+                endpoint.isNotBlank(),
+    ) {
+        Text(
+            if (engine.isStreaming) {
+                "Stop"
+            } else {
+                "Go live"
+            },
+        )
+    }
+
+    Text(
+        text =
+            "Test profile: 720p30, 2.5 Mbps video, " +
+                "128 Kbps audio",
+        color = Color(0xFFD7E2F4),
+    )
+
+    Text(
+        text =
+            "Next milestone: standard SRT to your " +
+                "home Jetson Nano.",
+        color = Color(0xFFD7E2F4),
+    )
 }
 
 private fun hasCameraAndMicrophonePermissions(
