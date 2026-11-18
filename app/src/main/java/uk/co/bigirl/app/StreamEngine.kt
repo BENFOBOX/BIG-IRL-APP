@@ -65,7 +65,28 @@ class StreamEngine(
             false
         }
     }
+fun attachPreviewSurface(
+    surfaceView: SurfaceView,
+) {
+    if (!prepared || !previewStarted) {
+        return
+    }
 
+    runCatching {
+        if (stream.isOnPreview) {
+            stream.stopPreview()
+        }
+
+        stream.startPreview(surfaceView)
+
+        event("Camera ready")
+    }.onFailure { error ->
+        event(
+            "Preview attach error: " +
+                (error.message ?: error.javaClass.simpleName),
+        )
+    }
+}
     fun updatePreviewSize(
         width: Int,
         height: Int,
