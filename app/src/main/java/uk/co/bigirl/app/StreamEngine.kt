@@ -13,7 +13,9 @@ class StreamEngine(
     private val stream = GenericStream(
         context.applicationContext,
         this,
-    )
+    ).apply {
+        getGlInterface().autoHandleOrientation = true
+    }
 
     private var prepared = false
     private var previewStarted = false
@@ -74,21 +76,22 @@ class StreamEngine(
             if (stream.isStreaming) {
                 stream.stopStream()
                 event("Stream stopped")
-            } else {
-                val cleanEndpoint = endpoint.trim()
-
-                if (
-                    !cleanEndpoint.startsWith("rtmp://") &&
-                    !cleanEndpoint.startsWith("rtmps://") &&
-                    !cleanEndpoint.startsWith("srt://")
-                ) {
-                    event("Enter a valid RTMP, RTMPS or SRT address")
-                    return false
-                }
-
-                stream.startStream(cleanEndpoint)
+                return true
             }
 
+            val cleanEndpoint = endpoint.trim()
+
+            val supported =
+                cleanEndpoint.startsWith("rtmp://") ||
+                    cleanEndpoint.startsWith("rtmps://") ||
+                    cleanEndpoint.startsWith("srt://")
+
+            if (!supported) {
+                event("Enter a valid RTMP, RTMPS or SRT address")
+                return false
+            }
+
+            stream.startStream(cleanEndpoint)
             true
         } catch (error: Throwable) {
             event(
